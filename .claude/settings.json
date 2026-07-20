@@ -21,7 +21,6 @@
       "Read(~/.aws/**)",
       "Read(~/.config/gcloud/**)",
       "Read(~/.kube/config)",
-
       "Read(node_modules/**)",
       "Read(vendor/**)",
       "Read(dist/**)",
@@ -44,7 +43,6 @@
       "Read(*.pdf)",
       "Read(*.mp4)",
       "Read(*.woff2)",
-
       "Bash(git push --force *)",
       "Bash(git push -f *)",
       "Bash(git reset --hard *)",
@@ -58,19 +56,16 @@
       "Bash(docker system prune *)",
       "Bash(* migrate deploy *)",
       "Bash(* db push *)",
-
       "Bash(gh pr merge *)",
       "Bash(gh release create *)",
       "Bash(git merge *)",
       "Bash(git rebase *)"
     ],
-
     "ask": [
       "Bash(git push *)",
       "Bash(rm -rf *)",
       "Bash(gh repo delete *)"
     ],
-
     "allow": [
       "Read(docs/**)",
       "Read(src/**)",
@@ -79,10 +74,24 @@
       "Bash(git log *)",
       "Bash(git status)",
       "Bash(git worktree list)",
-      "Bash(git branch *)"
+      "Bash(git branch *)",
+      "Bash(gh issue view *)",
+      "Bash(gh issue list *)",
+      "Bash(gh issue create *)",
+      "Bash(gh issue edit *)",
+      "Bash(gh issue comment *)",
+      "Bash(gh issue close *)",
+      "Bash(gh label list *)",
+      "Bash(gh label create *)",
+      "Bash(gh pr view *)",
+      "Bash(gh pr diff *)",
+      "Bash(gh pr list *)",
+      "Bash(gh pr create *)",
+      "Bash(gh repo view *)",
+      "Bash(gh run list *)",
+      "Bash(gh run view *)"
     ]
   },
-
   "worktree": {
     "baseRef": "fresh"
   }

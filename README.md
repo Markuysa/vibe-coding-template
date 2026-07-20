@@ -252,6 +252,12 @@ Claude Code — that is a persistent myth; `permissions.deny` is the real mechan
 | `Read(//tmp/x)` | absolute path — a **single** leading slash is *not* absolute |
 | `Bash(npm run test *)` | prefix match; the space before `*` enforces a word boundary, so `ls *` will not match `lsof` |
 
+Anything a workflow needs repeatedly belongs in `allow`, not in a skill's `allowed-tools`.
+A skill's grant covers only the turn that invoked it and clears on your next message — so
+in a multi-turn command like `/plan`, which confirms with you before creating issues, the
+grant has already expired by the time the `gh issue create` calls run. The `gh` rules in
+`allow` exist for exactly that reason.
+
 Three ways to lose an hour:
 
 - **`Write(...)` and `Glob(...)` are never matched** by file permission checks. They are
