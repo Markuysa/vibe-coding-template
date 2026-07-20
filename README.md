@@ -60,6 +60,17 @@ not by asking nicely.
 Sonnet is the default because cost scales with parallelism; opus is reserved for
 decomposition and synthesis, where it actually pays off.
 
+`dev` additionally preloads the [ponytail](https://github.com/DietrichGebert/ponytail)
+minimal-code ruleset (MIT, vendored into `.claude/skills/ponytail/`) through the `skills:`
+frontmatter field. It is scoped to `dev` on purpose: `validator` and `reviewer` keep their
+own priorities, and a second opinion about code volume would only muddy their reports.
+Precedence is stated explicitly in `dev.md` — acceptance criteria, `CLAUDE.md`, and the
+test rule all outrank it. Minimalism shapes the solution; it never trims the scope.
+
+It is vendored rather than installed as a plugin so it travels into cloud sessions with the
+repository, adding no marketplace fetch at session start and no third-party hooks. The
+tradeoff is that upstream fixes are not pulled automatically.
+
 **An honest caveat on "read-only".** `validator` and `reviewer` have no `Write` or `Edit`,
 but they do have `Bash` — and a shell can write files. That is a deliberate trade: without
 Bash the validator cannot run tests and the reviewer cannot run `git diff`. The boundary

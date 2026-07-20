@@ -39,10 +39,13 @@ Stopping here is a correct outcome, not a failure. Say so plainly and exit.
 **3. Claim it.** Add the `in-progress` label before touching any code, so a concurrent run
 does not pick up the same issue.
 
-**4. Implement.** Follow the same discipline as the `dev` role:
+**4. Implement.** Invoke the `ponytail` skill first, then follow the same discipline as the
+`dev` role:
 
 - Take build, test, and lint commands from `CLAUDE.md`. Do not invent them.
 - Tests are mandatory for business logic.
+- Minimalism governs the shape of the solution, never its scope. Every acceptance
+  criterion is explicitly requested and is not a candidate for simplification.
 - Work only on what the issue asks for. Anything else you notice becomes a new issue at
   step 7, not an extra commit here. Scope creep in an unattended run is invisible until
   review, which is exactly when it is most expensive.

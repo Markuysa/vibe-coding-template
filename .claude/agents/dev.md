@@ -2,6 +2,7 @@
 name: dev
 description: Implements ONE feature from a ticket with acceptance criteria. Writes code and tests in its own worktree. Use when a task is well-specified and independent of other in-flight work.
 tools: Read, Write, Edit, Bash, Grep, Glob, Skill
+skills: ponytail
 model: sonnet
 isolation: worktree
 maxTurns: 80
@@ -29,6 +30,10 @@ edits later.
 
 - Take build, test, and lint commands from the project's `CLAUDE.md`. Do not invent your own.
 - Tests are mandatory for business logic. For pure markup and config, use judgment.
+- **The `ponytail` minimal-code discipline is preloaded and applies to how you build.
+  Where it conflicts with the acceptance criteria, `CLAUDE.md`, or the test rule above,
+  those win.** Minimalism governs the shape of the solution, never its scope: a criterion
+  you were given is "explicitly requested" and is not a candidate for simplification.
 - Design tokens come only from the tokens file named in `CLAUDE.md`. Hardcoding colors
   or sizes is a reason to stop and ask.
 - You work in an isolated worktree. Do not edit files outside the repository and do not
