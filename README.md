@@ -16,7 +16,8 @@ CLAUDE.md                      # project memory, loaded every session ({{...}} p
 .claude/
   settings.json                # permissions deny/ask/allow + worktree.baseRef
   agents/                      # lead, dev, validator, reviewer, researcher
-  skills/                      # /spec /plan /ship /retro + execute-ticket, next-ticket, unblock
+  skills/                      # /spec /plan /ship /retro /autopilot + execute-ticket, next-ticket, unblock
+  autopilot.json               # kill switch for unattended execution
   scripts/setup.sh             # dependency install for cloud sessions
 docs/
   PRD-template.md
@@ -297,6 +298,23 @@ Set it up in this order:
    ```
    Run the unblock skill, then run the next-ticket skill. Autopilot mode.
    ```
+
+Then start the whole queue with one command:
+
+```
+/autopilot on
+```
+
+It refuses unless all four preflight checks pass — a CI workflow exists, branch protection
+lists required status checks, auto-merge is enabled, and something is actually `ready`. The
+second of those is the one that matters: with no required checks, `--auto` merges on the
+spot and autopilot means the opposite of what it looks like.
+
+`/autopilot off` stops the next ticket from starting. It does not kill a run already in
+flight, and it says so rather than implying everything stopped. The flag lives in
+`.claude/autopilot.json` and is committed, because cloud sessions read the clone — an
+uncommitted edit changes nothing — and because every flip should be in the history.
+`/autopilot status` reports the queue without changing anything.
 
 Keep `next-ticket` at one ticket in flight. Paired with `strict`, that is coherent: each
 merge invalidates every other open branch, so a wider queue would just thrash on rebases.

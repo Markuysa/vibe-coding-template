@@ -103,7 +103,9 @@
       "Bash(git worktree add *)",
       "Bash(git worktree remove *)",
       "Bash(git fetch *)",
-      "Bash(git remote -v)"
+      "Bash(git remote -v)",
+      "Bash(gh api repos/*)",
+      "Read(.claude/autopilot.json)"
     ]
   },
   "worktree": {
