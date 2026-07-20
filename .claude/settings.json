@@ -57,16 +57,18 @@
       "Bash(pnpm publish *)",
       "Bash(docker system prune *)",
       "Bash(* migrate deploy *)",
-      "Bash(* db push *)"
+      "Bash(* db push *)",
+
+      "Bash(gh pr merge *)",
+      "Bash(gh release create *)",
+      "Bash(git merge *)",
+      "Bash(git rebase *)"
     ],
 
     "ask": [
       "Bash(git push *)",
-      "Bash(git merge *)",
-      "Bash(git rebase *)",
-      "Bash(gh pr merge *)",
-      "Bash(gh release create *)",
-      "Bash(rm -rf *)"
+      "Bash(rm -rf *)",
+      "Bash(gh repo delete *)"
     ],
 
     "allow": [

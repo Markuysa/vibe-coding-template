@@ -16,7 +16,8 @@ CLAUDE.md                      # project memory, loaded every session ({{...}} p
 .claude/
   settings.json                # permissions deny/ask/allow + worktree.baseRef
   agents/                      # lead, dev, validator, reviewer, researcher
-  skills/                      # /spec /plan /ship /retro
+  skills/                      # /spec /plan /ship /retro + execute-ticket
+  scripts/setup.sh             # dependency install for cloud sessions
 docs/
   PRD-template.md
   ARCHITECTURE-template.md
@@ -81,11 +82,150 @@ project needs other gitignored files present — a worktree is a fresh checkout,
 it every agent hits a missing `.env` on its first run.
 
 Subagents can be isolated too: `isolation: worktree` in the frontmatter, already set on
-`dev`. To drive many sessions from one process and steer them from a browser or phone:
+`dev`.
+
+## Running it from your phone
+
+None of this lives in the repository — it is machine- and account-level configuration, so
+there is nothing here to commit. Set it up once per machine and it applies to every project
+using this template.
+
+| Feature | What it is for | How to start it |
+|---|---|---|
+| **Agent View** | See every session at once: who is working, who is blocked, who finished | `claude agents`, or `←` from any session. The same list appears in the Code tab on claude.ai and in the Claude mobile app |
+| **Remote Control** | Steer a running session: live output, approve or reject changes, redirect it | `claude remote-control` (server mode, spacebar shows a QR code) · `claude --remote-control` (normal interactive session) · `/remote-control` from a session already running |
+| **Dispatch** | File *new* work from your phone; it runs on your machine | Desktop app → **Cowork** tab → pair with the mobile app |
+
+Mnemonic: **Agent View watches · Remote Control steers · Dispatch creates.**
+
+The combination worth knowing about is server mode with worktrees:
 
 ```bash
 claude remote-control --spawn worktree --capacity 5
 ```
+
+One process, up to five sessions, each in its own isolated worktree, all steerable from a
+browser or phone. This is the closest native equivalent to a task board.
+
+### Push notifications
+
+No third-party app needed. Run `/config` and enable **Push when Claude decides** and
+**Push when actions required**. They fire while Remote Control is connected. You can also
+ask in the prompt: *"notify me when the tests finish"*. Notifications are suppressed while
+you are typing in the connected terminal. If `/config` shows **No mobile registered**, open
+the Claude app once so it refreshes its push token.
+
+The payoff for the workflow above: when an agent hits a permission prompt at the plan
+checkpoint, you approve it from wherever you are instead of it sitting idle until you get
+back to the desk.
+
+### Requirements and limits
+
+- **Plan**: Remote Control needs Pro, Max, Team, or Enterprise. Dispatch is **Pro or Max
+  only** — not available on Team or Enterprise.
+- **Auth**: claude.ai login via `/login`. **API keys do not work** — unset
+  `ANTHROPIC_API_KEY` if it is in your environment. Tokens from `claude setup-token` do not
+  work either.
+- **Endpoint**: unavailable on Bedrock, Google Cloud's Agent Platform, and Microsoft
+  Foundry, and whenever `ANTHROPIC_BASE_URL` points somewhere other than
+  `api.anthropic.com`.
+- **Workspace trust**: run `claude` in the project directory once to accept the trust dialog.
+- Your machine must stay awake, and the local process must keep running — closing the
+  terminal ends the session. An outage longer than roughly 10 minutes times the session out.
+- Starting an ultraplan session disconnects Remote Control; both occupy the same interface.
+- Some commands are local-only (`/plugin`, `/resume`). From the phone you get `/compact`,
+  `/clear`, `/context`, `/usage`, and `/model` / `/effort` with the value passed as an
+  argument instead of a picker.
+
+### What actually leaves your machine
+
+While Remote Control is connected, **the full session transcript** — your messages, the
+model's replies, and tool activity — is stored on Anthropic's servers. That is what keeps
+devices in sync and allows reconnecting after a drop. Code execution and filesystem access
+stay local. Organizations with Zero Data Retention cannot use it, and the
+`disableRemoteControl` setting turns it off entirely.
+
+Practical consequence: do not run Remote Control on sessions where secrets or regulated
+data are pulled into context.
+
+## Running it in the cloud
+
+Everything above runs on your machine. The same configuration also runs unattended on
+Anthropic's infrastructure, because a cloud session is a fresh VM with your repository
+cloned — so `CLAUDE.md`, `.claude/agents/`, `.claude/skills/` and `.claude/settings.json`
+all come along. Anything living in `~/.claude/` does not, which is why this template keeps
+everything in the repo.
+
+The loop is: GitHub issues hold the queue, a routine picks one up, a pull request comes back.
+
+### 1. Turn a plan into issues
+
+`/plan` prints its tickets, asks you to confirm, then creates them with `gh issue create`.
+Each issue carries its acceptance criteria verbatim — that text is the contract the
+executor and validator work from. Issues are labeled `ready` or `blocked`.
+
+### 2. Set up the cloud environment
+
+At [claude.ai/code](https://claude.ai/code), point your environment's **Setup script** at
+`.claude/scripts/setup.sh`. It installs project dependencies into the VM and the result is
+cached between sessions. Extend the project-specific section at the bottom for codegen,
+migrations, or seed data.
+
+### 3. Create the routine
+
+At [claude.ai/code/routines](https://claude.ai/code/routines), create a routine with this
+prompt — short on purpose, because the logic lives in the repo where it is versioned:
+
+```
+Read the issue number from the routine-fire-payload block,
+then run the execute-ticket skill for that issue.
+```
+
+Attach an **API trigger** and generate a token. Select the repository and the environment
+from step 2.
+
+### 4. Dispatch
+
+```bash
+curl -X POST https://api.anthropic.com/v1/claude_code/routines/<routine-id>/fire \
+  -H "Authorization: Bearer <token>" \
+  -H "anthropic-beta: experimental-cc-routine-2026-04-01" \
+  -H "anthropic-version: 2023-06-01" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Work on issue #42"}'
+```
+
+One call per issue. Dispatching explicitly rather than letting the routine hunt for work
+avoids two sessions claiming the same issue, and keeps parallelism under your control —
+which matters, because cloud sessions draw down the same plan limits as everything else.
+
+The response contains a session URL. Watch it from the browser or the Claude mobile app,
+answer questions, redirect it.
+
+### 5. Review
+
+`execute-ticket` opens a pull request from a `claude/`-prefixed branch with `Closes #42`,
+the acceptance criteria checked off, and the test output. You review and merge. It never
+merges, and the deny rules make sure of that rather than trusting the prompt.
+
+Issue labels track state: `ready` → `in-progress` → `in-review`, or `needs-attention` when
+the validator came back red.
+
+### What changes when nobody is watching
+
+Routines run with **no approval prompts at all**. Three consequences worth internalizing:
+
+- **`ask` rules do nothing.** They are an interactive guard only. Anything that must never
+  happen belongs in `deny` — which is why `gh pr merge`, `git merge`, `git rebase`, and
+  `gh release create` sit there rather than in `ask`.
+- **`execute-ticket` must not set `disable-model-invocation`.** That flag would stop a
+  routine from invoking it. The four `/`-commands set it; this one deliberately does not.
+- **There is no secrets store yet.** Environment variables are visible to anyone who can
+  edit the environment. `.worktreeinclude` does not apply in the cloud — it is a local
+  worktree mechanism.
+
+Interactive work stays interactive: `/spec` and `/plan` are conversations and are pointless
+in an unattended run. Decompose with Claude, dispatch the result.
 
 ## Permission rules: the syntax that actually matters
 
@@ -130,6 +270,7 @@ so switching with `/model` does not restore access.
 
 ## Notes
 
+- Agent View and Remote Control are research previews; flags and behavior may change.
 - All configuration is written in English on purpose: each role's `description` sits in
   context every session, and English tokenizes roughly twice as efficiently as Cyrillic.
 - Agent frontmatter and settings schema evolve — check
