@@ -252,6 +252,17 @@ Claude Code — that is a persistent myth; `permissions.deny` is the real mechan
 | `Read(//tmp/x)` | absolute path — a **single** leading slash is *not* absolute |
 | `Bash(npm run test *)` | prefix match; the space before `*` enforces a word boundary, so `ls *` will not match `lsof` |
 
+The `allow` list follows one principle: **inside its own worktree an agent may do anything
+reversible; the gate stands at the boundary.** Building, testing, linting, formatting,
+staging, and committing are mechanical and pre-approved. Crossing out of the worktree is
+not: `git push` asks, `git merge`, `gh pr merge`, and `gh release create` are denied
+outright. Adding a dependency (`go get`, `npm install <pkg>`) also asks, because that is a
+decision rather than mechanics, and `git worktree remove --force` asks because it destroys
+uncommitted work.
+
+The shipped rules are stack-agnostic git and `gh`. **Add your project's build and test
+commands** — the ones you put in `CLAUDE.md` — or the validator will prompt on every run.
+
 Anything a workflow needs repeatedly belongs in `allow`, not in a skill's `allowed-tools`.
 A skill's grant covers only the turn that invoked it and clears on your next message — so
 in a multi-turn command like `/plan`, which confirms with you before creating issues, the
