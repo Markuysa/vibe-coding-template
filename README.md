@@ -268,6 +268,44 @@ Routines run with **no approval prompts at all**. Three consequences worth inter
 Interactive work stays interactive: `/spec` and `/plan` are conversations and are pointless
 in an unattended run. Decompose with Claude, dispatch the result.
 
+### Autopilot: running the queue without merging by hand
+
+By default the chain advances on your merges. If you want it to run unattended end to end,
+the merge gate does not disappear — it moves from you to CI.
+
+**Do not enable this without required status checks.** `gh pr merge --auto` on a repository
+with no required checks merges immediately, which is not autopilot, it is merging whatever
+the agent wrote. `execute-ticket` refuses to queue an auto-merge in that situation.
+
+Set it up in this order:
+
+1. **CI that runs what the validator runs.** Build, vet, test, lint — plus a check that no
+   credential-shaped string and no `.env` or `config.yaml` is tracked. Under autopilot
+   nobody reads the diff, so that check is the last thing between a leaked key and your
+   default branch.
+2. **Branch protection** on the default branch: require those checks, and require the branch
+   to be up to date before merging (`strict`). Leave required reviews off — that is the
+   human gate you are deliberately replacing.
+3. **Enable auto-merge** on the repository (`gh repo edit --enable-auto-merge`).
+4. **Permissions.** `deny` beats `allow`, so a blanket `Bash(gh pr merge *)` deny blocks
+   `--auto` too. Narrow it: allow `Bash(gh pr merge --auto --squash *)`, send every other
+   merge form to `ask`, and keep `Bash(git merge *)` denied. Be honest with yourself that
+   the permission rule is no longer the guarantee — branch protection is.
+5. **Say autopilot in the routine prompt**, which is the only thing that turns step 8 of
+   `execute-ticket` on:
+
+   ```
+   Run the unblock skill, then run the next-ticket skill. Autopilot mode.
+   ```
+
+Keep `next-ticket` at one ticket in flight. Paired with `strict`, that is coherent: each
+merge invalidates every other open branch, so a wider queue would just thrash on rebases.
+
+What you keep: every change still arrives as a reviewable pull request, CI still has to be
+green, and the history is still linear and revertible. What you give up: nobody sees a wrong
+approach until it is already on the default branch — and with a dependency chain, whatever
+merges first is what every later ticket builds on.
+
 ## Permission rules: the syntax that actually matters
 
 `.claude/settings.json` ships with a deny baseline covering secrets, build output, lock
