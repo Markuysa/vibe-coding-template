@@ -16,7 +16,7 @@ CLAUDE.md                      # project memory, loaded every session ({{...}} p
 .claude/
   settings.json                # permissions deny/ask/allow + worktree.baseRef
   agents/                      # lead, dev, validator, reviewer, researcher
-  skills/                      # /spec /plan /ship /retro + execute-ticket
+  skills/                      # /spec /plan /ship /retro + execute-ticket, next-ticket, unblock
   scripts/setup.sh             # dependency install for cloud sessions
 docs/
   PRD-template.md
@@ -197,6 +197,8 @@ from step 2.
 
 ### 4. Dispatch
 
+Name the issue explicitly:
+
 ```bash
 curl -X POST https://api.anthropic.com/v1/claude_code/routines/<routine-id>/fire \
   -H "Authorization: Bearer <token>" \
@@ -206,9 +208,37 @@ curl -X POST https://api.anthropic.com/v1/claude_code/routines/<routine-id>/fire
   -d '{"text": "Work on issue #42"}'
 ```
 
-One call per issue. Dispatching explicitly rather than letting the routine hunt for work
-avoids two sessions claiming the same issue, and keeps parallelism under your control —
-which matters, because cloud sessions draw down the same plan limits as everything else.
+Or let the queue decide — see below.
+
+### Working the queue without naming tickets
+
+Two more skills turn the issue list into a conveyor:
+
+- **`next-ticket`** picks the lowest-numbered `ready` issue and runs `execute-ticket` on it.
+  It first counts issues labeled `in-progress` and stops if the limit (default **1**) is
+  reached, which is what prevents two runs from claiming the same ticket. One ticket per
+  run — it never loops.
+- **`unblock`** rereads every `blocked` issue's `## Depends on` section and promotes it to
+  `ready` once all referenced issues are closed.
+
+`unblock` keys off issues being **closed**, not off pull requests being opened, and that
+distinction is load-bearing: worktrees and cloud sessions branch from the default branch, so
+a ticket unblocked while its dependency is still an open PR would build against a tree that
+does not contain it.
+
+Wire them into one routine with a **GitHub trigger** on `pull_request.closed` filtered to
+merged, and this prompt:
+
+```
+Run the unblock skill, then run the next-ticket skill.
+```
+
+Now merging a pull request unblocks whatever depended on it and starts the next ticket. The
+chain advances on your merges, so a human review sits between every ticket by construction.
+Add a daily schedule trigger to the same routine as a heartbeat, in case a run dies without
+merging anything.
+
+To run the queue locally instead, just ask for it in a session: *"run next-ticket"*.
 
 The response contains a session URL. Watch it from the browser or the Claude mobile app,
 answer questions, redirect it.
