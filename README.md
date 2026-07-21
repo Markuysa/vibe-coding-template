@@ -16,11 +16,12 @@ CLAUDE.md                      # project memory, loaded every session ({{...}} p
 .claude/
   settings.json                # permissions deny/ask/allow + worktree.baseRef
   agents/                      # lead, dev, validator, reviewer, researcher
-  skills/                      # /spec /plan /ship /retro /autopilot + execute-ticket, next-ticket, unblock
+  skills/                      # /spec /plan /ship /retro /autopilot /board + execute-ticket, next-ticket, unblock
   autopilot.json               # kill switch for unattended execution
   scripts/setup.sh             # dependency install for cloud sessions
 .github/workflows/ci.yml       # the merge gate autopilot depends on
 docs/
+  tickets/                     # the queue: one file per ticket, statuses derived from git
   PRD-template.md
   ARCHITECTURE-template.md
   QUICK_REF.md                 # cheat sheet, keep under 50 lines
@@ -39,7 +40,7 @@ Then, in the first session:
 
 1. *"Read CLAUDE.md and fill in the placeholders. Stack: `<your stack>`"*
 2. `/spec <idea>` — one question at a time, produces `docs/PRD.md` with acceptance criteria
-3. `/plan` — architecture sketch plus independent tickets, each sized for one agent
+3. `/plan` — architecture sketch plus independent tickets in `docs/tickets/`, one file each
 4. `claude --worktree <ticket>` per ticket — isolated checkout, isolated branch
 5. `/ship` — validator, then reviewer, then a summary for you to decide on
 6. `/retro` — turn what you explained twice into config, and commit it back **here**
@@ -169,13 +170,20 @@ cloned — so `CLAUDE.md`, `.claude/agents/`, `.claude/skills/` and `.claude/set
 all come along. Anything living in `~/.claude/` does not, which is why this template keeps
 everything in the repo.
 
-The loop is: GitHub issues hold the queue, a routine picks one up, a pull request comes back.
+The loop is: `docs/tickets/` holds the queue, a routine picks one up, a pull request comes
+back. The queue is files in the repository — no issue tracker, no API, no hosting lock-in.
+Statuses are **derived from git**, never stored: `done` can only land in main by merging
+the ticket's branch, `ready`/`blocked` are computed from dependencies, and a claimed
+ticket is simply one whose `claude/NNN-*` branch exists. The board cannot disagree with
+reality because the board *is* reality. Full model: `docs/tickets/README.md`. Render it
+any time with `/board`.
 
-### 1. Turn a plan into issues
+### 1. Turn a plan into ticket files
 
-`/plan` prints its tickets, asks you to confirm, then creates them with `gh issue create`.
-Each issue carries its acceptance criteria verbatim — that text is the contract the
-executor and validator work from. Issues are labeled `ready` or `blocked`.
+`/plan` prints its tickets, asks you to confirm, then writes one file per ticket to
+`docs/tickets/NNN-slug.md` and commits them. Each file carries `role`, `depends`, and the
+acceptance criteria verbatim — that text is the contract the executor and validator work
+from.
 
 ### 2. Set up the cloud environment
 
@@ -190,8 +198,8 @@ At [claude.ai/code/routines](https://claude.ai/code/routines), create a routine 
 prompt — short on purpose, because the logic lives in the repo where it is versioned:
 
 ```
-Read the issue number from the routine-fire-payload block,
-then run the execute-ticket skill for that issue.
+Read the ticket id from the routine-fire-payload block,
+then run the execute-ticket skill for that ticket.
 ```
 
 Attach an **API trigger** and generate a token. Select the repository and the environment
@@ -199,7 +207,7 @@ from step 2.
 
 ### 4. Dispatch
 
-Name the issue explicitly:
+Name the ticket explicitly:
 
 ```bash
 curl -X POST https://api.anthropic.com/v1/claude_code/routines/<routine-id>/fire \
@@ -207,26 +215,26 @@ curl -X POST https://api.anthropic.com/v1/claude_code/routines/<routine-id>/fire
   -H "anthropic-beta: experimental-cc-routine-2026-04-01" \
   -H "anthropic-version: 2023-06-01" \
   -H "Content-Type: application/json" \
-  -d '{"text": "Work on issue #42"}'
+  -d '{"text": "Work on ticket 3"}'
 ```
 
 Or let the queue decide — see below.
 
 ### Working the queue without naming tickets
 
-Two more skills turn the issue list into a conveyor:
+- **`next-ticket`** picks the lowest-id ready ticket and runs `execute-ticket` on it. It
+  claims by **pushing the ticket branch** — a second run trying the same ticket fails the
+  push and moves on, so the lock is git itself. It counts in-flight branches first and
+  stops at the limit (default **1**). One ticket per run — it never loops.
+- **`unblock`** is now a read-only report: with derived statuses a merge unblocks
+  dependants by itself, so the skill just tells you what the latest merge freed. It is
+  kept because routine prompts call it before `next-ticket`.
 
-- **`next-ticket`** picks the lowest-numbered `ready` issue and runs `execute-ticket` on it.
-  It first counts issues labeled `in-progress` and stops if the limit (default **1**) is
-  reached, which is what prevents two runs from claiming the same ticket. One ticket per
-  run — it never loops.
-- **`unblock`** rereads every `blocked` issue's `## Depends on` section and promotes it to
-  `ready` once all referenced issues are closed.
-
-`unblock` keys off issues being **closed**, not off pull requests being opened, and that
-distinction is load-bearing: worktrees and cloud sessions branch from the default branch, so
-a ticket unblocked while its dependency is still an open PR would build against a tree that
-does not contain it.
+Unblocking keys off tickets being **merged into main**, not off pull requests being
+opened, and that distinction is load-bearing: worktrees and cloud sessions branch from
+the default branch, so a ticket freed while its dependency is still an open PR would
+build against a tree that does not contain it. The derived model makes this automatic —
+`done` cannot exist in main without the merge.
 
 Wire them into one routine with a **GitHub trigger** on `pull_request.closed` filtered to
 merged, and this prompt:
@@ -247,12 +255,15 @@ answer questions, redirect it.
 
 ### 5. Review
 
-`execute-ticket` opens a pull request from a `claude/`-prefixed branch with `Closes #42`,
-the acceptance criteria checked off, and the test output. You review and merge. It never
-merges, and the deny rules make sure of that rather than trusting the prompt.
+`execute-ticket` opens a pull request from a `claude/`-prefixed branch: acceptance
+criteria checked off, test output, and the ticket file flipped to `status: done` as its
+last commit — merging is what lands `done` in main. You review and merge. It never merges
+itself, and the deny rules make sure of that rather than trusting the prompt.
 
-Issue labels track state: `ready` → `in-progress` → `in-review`, or `needs-attention` when
-the validator came back red.
+On GitLab it opens an MR via `glab`; with no remote at all it stops after the `done`
+commit and names the branch for you to review — the queue is hosting-agnostic, only the
+merge step differs. A red validator run parks the ticket at `needs-attention` with the
+failing output written into the ticket file itself.
 
 ### What changes when nobody is watching
 
@@ -352,8 +363,8 @@ commands** — the ones you put in `CLAUDE.md` — or the validator will prompt 
 
 Anything a workflow needs repeatedly belongs in `allow`, not in a skill's `allowed-tools`.
 A skill's grant covers only the turn that invoked it and clears on your next message — so
-in a multi-turn command like `/plan`, which confirms with you before creating issues, the
-grant has already expired by the time the `gh issue create` calls run. The `gh` rules in
+in a multi-turn command like `/plan`, which confirms with you before writing tickets, the
+grant has already expired by the time the follow-up commands run. The `gh` rules in
 `allow` exist for exactly that reason.
 
 Two lessons from running this for real, both of which cost an hour:
