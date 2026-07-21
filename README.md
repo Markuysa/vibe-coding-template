@@ -15,7 +15,7 @@ CLAUDE.md                      # project memory, loaded every session ({{...}} p
 .worktreeinclude               # gitignored files (.env) to copy into each new worktree
 .claude/
   settings.json                # permissions deny/ask/allow + worktree.baseRef
-  agents/                      # lead, dev, validator, reviewer, researcher
+  agents/                      # lead, designer, frontend, backend, qa, dev, validator, reviewer, researcher
   skills/                      # /spec /plan /ship /retro /autopilot /board + execute-ticket, next-ticket, unblock
   autopilot.json               # kill switch for unattended execution
   scripts/setup.sh             # dependency install for cloud sessions
@@ -47,28 +47,45 @@ Then, in the first session:
 
 The template is meant to compound. Step 6 is what makes the next project start smarter.
 
-## The roles
+## The team
 
-Each role is a subagent in `.claude/agents/`. Tool access is enforced by the `tools` field,
-not by asking nicely.
+Each role is a subagent in `.claude/agents/`. Tool access is enforced by the `tools`
+field, not by asking nicely. Every ticket names the `role` that implements it;
+`execute-ticket` delegates accordingly, and the lead routes by the same table.
 
-| Role | Model | Tools | maxTurns |
+| Role | Model | Takes | maxTurns |
 |---|---|---|---|
-| `lead` | opus | all (inherits) | 60 |
-| `dev` | sonnet | Read, Write, Edit, Bash, Grep, Glob, Skill — plus `isolation: worktree` | 80 |
-| `validator` | sonnet | Read, Grep, Glob, Bash | 40 |
-| `reviewer` | sonnet | Read, Grep, Glob, Bash | 40 |
-| `researcher` | haiku | Read, Grep, Glob, WebSearch, WebFetch | 30 |
+| `lead` | opus | decomposition, routing, synthesis — never implements | 60 |
+| `designer` | sonnet | tokens, primitives, design system, component states | 60 |
+| `frontend` | sonnet | screens and client logic, on the design system + API contract | 80 |
+| `backend` | sonnet | APIs, storage, pipelines — behind the contract | 80 |
+| `qa` | sonnet | e2e/integration suites that prove acceptance criteria | 60 |
+| `dev` | sonnet | generalist fallback for cross-cutting tickets | 80 |
+| `validator` | sonnet | runs tests/lint/types, green-red verdict, no write tools | 40 |
+| `reviewer` | sonnet | reviews the diff, no write tools | 40 |
+| `researcher` | haiku | scouting code and docs, returns a summary | 30 |
 
-Sonnet is the default because cost scales with parallelism; opus is reserved for
-decomposition and synthesis, where it actually pays off.
+All implementers carry `isolation: worktree`, so parallel tickets cannot touch each
+other's files. Sonnet is the default because cost scales with parallelism; opus is
+reserved for decomposition and synthesis, where it actually pays off.
 
-`dev` additionally preloads the [ponytail](https://github.com/DietrichGebert/ponytail)
-minimal-code ruleset (MIT, vendored into `.claude/skills/ponytail/`) through the `skills:`
-frontmatter field. It is scoped to `dev` on purpose: `validator` and `reviewer` keep their
-own priorities, and a second opinion about code volume would only muddy their reports.
-Precedence is stated explicitly in `dev.md` — acceptance criteria, `CLAUDE.md`, and the
-test rule all outrank it. Minimalism shapes the solution; it never trims the scope.
+**Handoffs are how work flows through the team.** Each ticket ends with the implementer
+writing a `## Handoff` section into the ticket file — what exists now, where it lives,
+what to import rather than rebuild. The next specialist starts by reading the handoffs of
+its ticket's dependencies. Designer → frontend → qa is a chain of these sections, carried
+by git: a handoff lands in main only when the ticket's branch merges.
+
+**Each role's skill pool is editable.** The `skills:` frontmatter line preloads skills
+into that role — the builder roles ship with [ponytail](https://github.com/DietrichGebert/ponytail)
+attached this way. Add a skill to a role by adding its name to the line; remove it by
+deleting it; write new skills as `.claude/skills/<name>/SKILL.md`. Roles are markdown —
+editing the team is editing files.
+
+The ponytail ruleset (MIT, vendored into `.claude/skills/ponytail/`) is scoped to the
+builder roles on purpose: `validator` and `reviewer` keep their own priorities, and a
+second opinion about code volume would only muddy their reports. Precedence is stated in
+each builder's prompt — acceptance criteria, `CLAUDE.md`, and the test rule all outrank
+it. Minimalism shapes the solution; it never trims the scope.
 
 It is vendored rather than installed as a plugin so it travels into cloud sessions with the
 repository, adding no marketplace fetch at session start and no third-party hooks. The
