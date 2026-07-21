@@ -19,6 +19,7 @@ CLAUDE.md                      # project memory, loaded every session ({{...}} p
   skills/                      # /spec /plan /ship /retro /autopilot + execute-ticket, next-ticket, unblock
   autopilot.json               # kill switch for unattended execution
   scripts/setup.sh             # dependency install for cloud sessions
+.github/workflows/ci.yml       # the merge gate autopilot depends on
 docs/
   PRD-template.md
   ARCHITECTURE-template.md
@@ -280,10 +281,10 @@ the agent wrote. `execute-ticket` refuses to queue an auto-merge in that situati
 
 Set it up in this order:
 
-1. **CI that runs what the validator runs.** Build, vet, test, lint — plus a check that no
-   credential-shaped string and no `.env` or `config.yaml` is tracked. Under autopilot
-   nobody reads the diff, so that check is the last thing between a leaked key and your
-   default branch.
+1. **CI that runs what the validator runs.** `.github/workflows/ci.yml` ships with the
+   template: Go and Node jobs that no-op until the project has that stack, plus a secrets
+   check. Add your own commands; keep the secrets job even if you drop the rest, because
+   under autopilot nobody reads the diff before it merges.
 2. **Branch protection** on the default branch: require those checks, and require the branch
    to be up to date before merging (`strict`). Leave required reviews off — that is the
    human gate you are deliberately replacing.
@@ -354,6 +355,17 @@ A skill's grant covers only the turn that invoked it and clears on your next mes
 in a multi-turn command like `/plan`, which confirms with you before creating issues, the
 grant has already expired by the time the `gh issue create` calls run. The `gh` rules in
 `allow` exist for exactly that reason.
+
+Two lessons from running this for real, both of which cost an hour:
+
+- **Bash rules match a prefix, so argument order matters.** `Bash(gh pr merge --auto
+  --squash *)` does not match `gh pr merge 22 --auto --squash`, because the flags do not
+  come first. Put flags immediately after the subcommand, or write the rule to match how
+  you actually invoke it. This is why the real guarantee is branch protection, not the
+  permission rule.
+- **Permissions come from the project you opened the session in.** Running a session in
+  one repository while operating on another silently uses the wrong `settings.json`, and
+  every rule you carefully added appears not to work.
 
 Three ways to lose an hour:
 
